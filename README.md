@@ -59,6 +59,16 @@ despotx \
     --device cuda
 ```
 
+Plot side-by-side UMAP of raw vs decontaminated counts (requires `scanpy`):
+
+```bash
+python scripts/plot_umap.py \
+    --raw example_data/merfish_brain_example.h5ad \
+    --adjusted example_output/adjusted.h5ad \
+    --cell-type-col cell_type_manual \
+    --out example_data/umap_raw_vs_despotx.png
+```
+
 After decontamination, UMAP shows tighter, better-separated clusters:
 
 ![Raw vs DeSpotX-decontaminated UMAP](example_data/umap_raw_vs_despotx.png)

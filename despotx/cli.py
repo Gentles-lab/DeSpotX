@@ -121,40 +121,9 @@ def main():
                               set_decoder_shift=True)
 
     print(f"[despotx] training for {args.epochs} epochs")
-    train_result = train(
-        model, dataset, n_epochs=args.epochs, batch_size=args.batch_size,
-        lr=args.lr, device=args.device, num_workers=args.num_workers,
-        amp=args.amp)
-    history = train_result["history"]
-
-    hist_df = pd.DataFrame(history)
-    hist_df.to_csv(out / "training_history.csv", index=False)
-    try:
-        import matplotlib
-        matplotlib.use("Agg")
-        import matplotlib.pyplot as plt
-        components = [c for c in ("recon", "anchor", "diff", "eps_prior")
-                      if c in hist_df.columns]
-        fig, axes = plt.subplots(1, 2, figsize=(11, 4))
-        axes[0].plot(hist_df["epoch"] + 1, hist_df["loss"],
-                     marker="o", color="#222")
-        axes[0].set_xlabel("epoch")
-        axes[0].set_ylabel("total loss")
-        axes[0].set_title("Total training loss")
-        axes[0].grid(alpha=0.3)
-        for c in components:
-            axes[1].plot(hist_df["epoch"] + 1, hist_df[c], marker="o", label=c)
-        axes[1].set_xlabel("epoch")
-        axes[1].set_ylabel("component loss")
-        axes[1].set_title("Per-component loss")
-        axes[1].legend(frameon=False)
-        axes[1].grid(alpha=0.3)
-        fig.tight_layout()
-        fig.savefig(out / "training_loss.png", dpi=200)
-        plt.close(fig)
-        print(f"[despotx]   wrote training_history.csv and training_loss.png")
-    except ImportError:
-        print(f"[despotx]   wrote training_history.csv (matplotlib unavailable)")
+    train(model, dataset, n_epochs=args.epochs, batch_size=args.batch_size,
+          lr=args.lr, device=args.device, num_workers=args.num_workers,
+          amp=args.amp)
 
     print(f"[despotx] inference")
     result = adjust_counts(model, dataset, batch_size=256,
