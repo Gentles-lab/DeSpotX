@@ -10,7 +10,7 @@ The fastest way is a one-shot conda environment that pulls all pinned
 dependencies and installs DeSpotX itself:
 
 ```bash
-git clone https://github.com/<org>/DeSpotX.git
+git clone https://github.com/Gentles-lab/DeSpotX.git
 cd DeSpotX
 conda env create -f environment.yml
 conda activate despotx
