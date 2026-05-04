@@ -4,16 +4,32 @@ DeSpotX, a deep generative model for single-cell spatial transcriptomics deconta
 
 ![DeSpotX overview](DeSpotXOverview.png)
 
+## Install
+
+DeSpotX requires Python ≥ 3.9. Install the dependencies:
+
+```bash
+pip install torch torch_geometric anndata numpy pandas scipy matplotlib
+```
+
+`matplotlib` is only needed for the optional training-loss figure;
+the model trains and runs without it.
+
+Clone this repository — no pip-install of the package itself is required;
+`scripts/run_despotx.py` adds the parent directory to `sys.path` at runtime:
+
+```bash
+git clone https://github.com/<org>/DeSpotX.git
+cd DeSpotX
+```
+
 ## Quickstart with example data
 
-A 4,237-cell × 550-gene MERFISH brain subset with a 10% ambient-RNA spike-in
-ships in `example_data/` for end-to-end testing:
+A ~12,000-cell × 550-gene MERFISH brain subset (raw, single tissue
+sub-region, 25 cell types) ships in `example_data/`:
 
-- `merfish_brain_example.h5ad` — 25 cell types in `obs.cell_type_manual`,
-  spatial coordinates in `obsm["spatial"]`.
-- `merfish_brain_example_ground_truth.npz` — keys `spiked_counts`,
-  `contam_counts`, `eps_per_cell` (per-cell ground truth for evaluation).
-  True signal = `spiked_counts − contam_counts`.
+- `merfish_brain_example.h5ad` — cell-type labels in
+  `obs.cell_type_manual`, spatial coordinates in `obsm["spatial"]`.
 
 Run DeSpotX:
 
@@ -23,22 +39,9 @@ python scripts/run_despotx.py \
     --cell-type-col cell_type_manual \
     --spatial-key spatial \
     --out example_output/ \
-    --device cpu \
-    --epochs 5
+    --device cuda
 ```
 
-Evaluate against ground truth:
+After decontamination, UMAP shows tighter, better-separated clusters:
 
-```python
-import numpy as np
-import anndata as ad
-import pandas as pd
-
-gt = np.load("example_data/merfish_brain_example_ground_truth.npz")
-true = (gt["spiked_counts"] - gt["contam_counts"]).clip(min=0)
-adj = ad.read_h5ad("example_output/adjusted.h5ad").X.toarray()
-pred_eps = pd.read_csv("example_output/contamination.tsv", sep="\t")["contamination"].values
-
-print("retention :", adj.sum() / true.sum())
-print("epsilon MAE:", np.mean(np.abs(pred_eps - gt["eps_per_cell"])))
-```
+![Raw vs DeSpotX-decontaminated UMAP](example_data/umap_raw_vs_despotx.png)
