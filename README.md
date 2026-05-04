@@ -6,21 +6,38 @@ DeSpotX, a deep generative model for single-cell spatial transcriptomics deconta
 
 ## Install
 
-DeSpotX requires Python ≥ 3.9. Install the dependencies:
-
-```bash
-pip install torch torch_geometric anndata numpy pandas scipy matplotlib
-```
-
-`matplotlib` is only needed for the optional training-loss figure;
-the model trains and runs without it.
-
-Clone this repository — no pip-install of the package itself is required;
-`scripts/run_despotx.py` adds the parent directory to `sys.path` at runtime:
+The fastest way is a one-shot conda environment that pulls all pinned
+dependencies and installs DeSpotX itself:
 
 ```bash
 git clone https://github.com/<org>/DeSpotX.git
 cd DeSpotX
+conda env create -f environment.yml
+conda activate despotx
+```
+
+This installs the `despotx` CLI and importable Python package. Verify with:
+
+```bash
+despotx --help
+```
+
+For GPU support, edit `environment.yml` to use the CUDA-matching pytorch
+build (e.g. `pytorch=2.11.0=*cuda*`) before `conda env create`.
+
+### Alternative: build a conda package locally
+
+```bash
+conda install -c conda-forge conda-build
+conda build conda-recipe/
+conda install --use-local despotx
+```
+
+### Alternative: pip from source
+
+```bash
+pip install .
+# or for development: pip install -e .
 ```
 
 ## Quickstart with example data
@@ -34,7 +51,7 @@ sub-region, 25 cell types) ships in `example_data/`:
 Run DeSpotX:
 
 ```bash
-python scripts/run_despotx.py \
+despotx \
     --h5ad example_data/merfish_brain_example.h5ad \
     --cell-type-col cell_type_manual \
     --spatial-key spatial \

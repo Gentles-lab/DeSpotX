@@ -1,0 +1,18 @@
+name: despotx
+channels:
+  - conda-forge
+  - pytorch
+  - pyg
+dependencies:
+  - python=3.11
+  - pytorch=2.11.0
+  - pyg=2.7.0
+  - anndata=0.12.10
+  - numpy=2.4.4
+  - pandas=2.3.3
+  - scipy=1.17.1
+  - matplotlib=3.10.8
+  - scanpy=1.11.5
+  - pip
+  - pip:
+      - -e .

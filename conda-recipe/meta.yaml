@@ -1,0 +1,51 @@
+{% set name = "despotx" %}
+{% set version = "0.1.0" %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  path: ..
+
+build:
+  number: 0
+  noarch: python
+  script: {{ PYTHON }} -m pip install . -vv --no-deps --ignore-installed
+  entry_points:
+    - despotx = despotx.cli:main
+
+requirements:
+  host:
+    - python >=3.9
+    - pip
+    - setuptools >=64
+    - wheel
+  run:
+    - python >=3.9
+    - pytorch >=2.0
+    - pyg >=2.5
+    - anndata >=0.10
+    - numpy >=1.24
+    - pandas >=2.0
+    - scipy >=1.10
+
+test:
+  imports:
+    - despotx
+  commands:
+    - despotx --help
+
+about:
+  home: https://github.com/your-org/DeSpotX
+  license: MIT
+  license_file: ../LICENSE
+  summary: Spatial-aware ambient RNA decontamination for single-cell spatial transcriptomics
+  description: |
+    DeSpotX is a graph-attention encoder + cell-type-conditioned decoder
+    + latent diffusion prior, trained jointly to factor each cell's counts
+    into a native-signal component and a spatially-aggregated ambient component.
+
+extra:
+  recipe-maintainers:
+    - your-github-handle
