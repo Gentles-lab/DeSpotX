@@ -59,6 +59,18 @@ despotx \
     --device cuda
 ```
 
+This writes the following files to `example_output/`:
+
+| File | Contents |
+|---|---|
+| `adjusted.h5ad` | Decontaminated AnnData. `.X` holds the corrected counts (cells × genes); `obs["epsilon"]` is the per-cell ambient fraction. |
+| `adjusted.mtx` | Same corrected counts in MatrixMarket format (genes × cells), for tools that don't read AnnData. |
+| `adjusted_float.npy` | Same corrected counts as a (cells, genes) float32 NumPy array. |
+| `anchor_mask.npy` | (cell_type, genes) boolean array marking the anchor positions used during training. |
+| `genes.tsv` | One gene name per line, in column order of the matrices. |
+| `cells.tsv` | One cell barcode per line, in row order. |
+| `contamination.tsv` | Two columns: `cell_id` and the predicted per-cell ambient fraction `contamination` (= ε). |
+
 Plot side-by-side UMAP of raw vs decontaminated counts (requires `scanpy`):
 
 ```bash
@@ -66,9 +78,9 @@ python scripts/plot_umap.py \
     --raw example_data/merfish_brain_example.h5ad \
     --adjusted example_output/adjusted.h5ad \
     --cell-type-col cell_type_manual \
-    --out example_data/umap_raw_vs_despotx.png
+    --out example_output/umap_raw_vs_despotx.png
 ```
 
 After decontamination, UMAP shows tighter, better-separated clusters:
 
-![Raw vs DeSpotX-decontaminated UMAP](example_data/umap_raw_vs_despotx.png)
+![Raw vs DeSpotX-decontaminated UMAP](example_output/umap_raw_vs_despotx.png)
