@@ -16,7 +16,7 @@ class CellTypeDecoder(nn.Module):
             layers += [nn.Linear(a, b), nn.Softplus()]
         self.trunk = nn.Sequential(*layers)
         self.out = nn.Linear(hidden[-1], n_genes)
-        self.type_logit_shift = None
+        self.register_buffer("type_logit_shift", None)
         self.use_logit_shift = False
         with torch.no_grad():
             self.out.weight.mul_(0.1)

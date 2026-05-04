@@ -144,10 +144,12 @@ class DeSpotX(nn.Module):
         log_means = np.log(means + 1e-8)
         log_means -= log_means.mean(axis=1, keepdims=True)
         shift = torch.from_numpy(log_means.astype(np.float32))
-        self.register_buffer("type_logit_shift", shift)
         if set_decoder_shift:
-            self.decoder.type_logit_shift = self.type_logit_shift
+            # Register on the decoder so .to(device) moves it correctly.
+            self.decoder.register_buffer("type_logit_shift", shift)
             self.decoder.use_logit_shift = True
+        else:
+            self.register_buffer("type_logit_shift", shift)
 
         # Frequency-balanced fallback: equal weight per cell type.
         global_ambient = means.mean(axis=0)
