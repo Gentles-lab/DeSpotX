@@ -6,8 +6,7 @@ DeSpotX, a deep generative model for single-cell spatial transcriptomics deconta
 
 ## Install
 
-The fastest way is a one-shot conda environment that pulls all pinned
-dependencies and installs DeSpotX itself:
+### Use conda environment
 
 ```bash
 git clone https://github.com/Gentles-lab/DeSpotX.git
