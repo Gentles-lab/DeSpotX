@@ -43,6 +43,11 @@ def main():
 
     warnings.filterwarnings("ignore")
 
+    # Pin global RNG in addition to the per-call random_state below, so the
+    # figure is byte-reproducible across runs at a fixed --seed.
+    np.random.seed(args.seed)
+    sc.settings.seed = args.seed
+
     print(f"[plot_umap] loading {args.raw}")
     raw = ad.read_h5ad(args.raw)
     print(f"[plot_umap] loading {args.adjusted}")

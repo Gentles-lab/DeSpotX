@@ -80,7 +80,12 @@ class GATEncoder(nn.Module):
             edge_w = torch.exp(-nbr_d / sigma)              # (B, K) in (0, 1]
         else:
             edge_w = nbr_d
-        edge_attr = edge_w.reshape(B * K, 1).repeat(2, 1)
+        # edge_index is built per-cell (cell0 fwd+bwd, cell1 fwd+bwd, ...), so
+        # edge_attr must interleave the same way: for each cell, its K weights
+        # twice (fwd then bwd). The old `reshape(B*K,1).repeat(2,1)` ordered all
+        # cells then repeated the block, which mis-paired every edge for B>1
+        # (fixed 2026-08-04; only aligned at batch=1).
+        edge_attr = edge_w.reshape(B, K, 1).repeat(1, 2, 1).reshape(2 * B * K, 1)
         h = node_h
         for i, gat in enumerate(self.gat_layers):
             h = gat(h, edge_index, edge_attr)
