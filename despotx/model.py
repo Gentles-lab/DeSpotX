@@ -1,60 +1,25 @@
-"""DeSpotX model: GAT encoder + cell-type decoder + latent diffusion prior."""
+"""DeSpotX model: GAT encoder + cell-type decoder."""
 
 import math
 import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 
 from .decoder import CellTypeDecoder
 from .encoder import GATEncoder
 
 
-def sinusoidal_embedding(t, dim):
-    half = dim // 2
-    freqs = torch.exp(-math.log(10000.0) *
-                      torch.arange(half, device=t.device) / (half - 1))
-    args = t.float().unsqueeze(-1) * freqs.unsqueeze(0)
-    return torch.cat([torch.sin(args), torch.cos(args)], dim=-1)
-
-
-class LatentScoreNet(nn.Module):
-    """Score network for the latent diffusion. Conditioned on the encoder's
-    spatial-context embedding h and the cell-type embedding."""
-
-    def __init__(self, z_dim, h_dim, n_types,
-                 t_emb_dim = 64, type_embed_dim = 32,
-                 hidden = 256):
-        super().__init__()
-        self.t_emb_dim = t_emb_dim
-        self.type_embed = nn.Embedding(n_types, type_embed_dim)
-        in_dim = z_dim + t_emb_dim + h_dim + type_embed_dim
-        self.net = nn.Sequential(
-            nn.Linear(in_dim, hidden), nn.SiLU(),
-            nn.Linear(hidden, hidden), nn.SiLU(),
-            nn.Linear(hidden, z_dim),
-        )
-        nn.init.zeros_(self.net[-1].weight)
-        nn.init.zeros_(self.net[-1].bias)
-
-    def forward(self, z_t, t, h, cell_type):
-        t_emb = sinusoidal_embedding(t, self.t_emb_dim)
-        ct_emb = self.type_embed(cell_type)
-        return self.net(torch.cat([z_t, t_emb, h, ct_emb], dim=-1))
-
-
 class DeSpotX(nn.Module):
-    """DeSpotX: cell-type-aware, manifold-regularised decontamination."""
+    """DeSpotX: cell-type-aware decontamination."""
 
     def __init__(self, n_genes, n_types, z_dim = 16,
-                 hidden = 256, heads = 4, T = 100,
+                 hidden = 256, heads = 4,
                  anchor_mask=None, anchor_weight = 50.0,
                  anchor_warmup_epochs = 3,
-                 diff_loss_weight = 1.0, refine_t_frac = 0.2,
+                 apply_output_mask = True,
                  eps_prior_weight = 1.0,
                  chi_mode = "other_type_hard", chi_soft_leak = 0.1,
                  edge_feat = "kernel",
-                 diff_detach = True,
                  mu_eps_strategy = "clamp",
                  mu_eps_hyperprior_weight = 1.0,
                  n_gat_layers = 1,
@@ -63,11 +28,7 @@ class DeSpotX(nn.Module):
         self.n_genes = n_genes
         self.n_types = n_types
         self.z_dim = z_dim
-        self.T = T
-        self.diff_weight = diff_loss_weight
-        self.refine_t_frac = refine_t_frac
         self.eps_prior_weight = eps_prior_weight
-        self.diff_detach = diff_detach
         if mu_eps_strategy not in ("free", "clamp", "hyperprior", "fixed"):
             raise ValueError(
                 f"mu_eps_strategy must be one of 'free', 'clamp', "
@@ -92,18 +53,12 @@ class DeSpotX(nn.Module):
             edge_feat=edge_feat,
             n_gat_layers=n_gat_layers)
         self.decoder = CellTypeDecoder(z_dim, n_types, n_genes)
-        self.score_net = LatentScoreNet(
-            z_dim=z_dim, h_dim=hidden, n_types=n_types)
         self.eps_head = nn.Linear(hidden, 1)
         # eps_head_init seeds the architectural ε prior (default 0.20).
         eps_head_init = float(np.clip(eps_head_init, 1e-3, 1 - 1e-3))
         nn.init.constant_(self.eps_head.bias,
                           math.log(eps_head_init / (1 - eps_head_init)))
         self.log_theta = nn.Parameter(torch.zeros(n_genes))
-
-        self.register_buffer(
-            "alphas_cumprod",
-            torch.cumprod(1.0 - torch.linspace(1e-4, 0.02, T), dim=0))
 
         if anchor_mask is not None:
             self.register_buffer(
@@ -113,6 +68,10 @@ class DeSpotX(nn.Module):
             self.anchor_mask = None
         self.anchor_weight_target = anchor_weight
         self.anchor_warmup_epochs = anchor_warmup_epochs
+        # Whether inference applies the hard output mask (1 - anchor_mask[ct]) to
+        # the adjusted counts. False drops only that hard zeroing, independent of
+        # the anchor training loss.
+        self.apply_output_mask = apply_output_mask
         self._current_anchor_weight = 0.0
 
     # ------------------------------------------------------------------
@@ -166,7 +125,6 @@ class DeSpotX(nn.Module):
         """One gradient step of the joint objective (Eq. 6 of the paper)."""
         x = batch["counts"]
         ct = batch["cell_type"]
-        B = x.size(0)
         device = x.device
 
         h, z = self._encode(batch)
@@ -189,16 +147,6 @@ class DeSpotX(nn.Module):
             loss_anchor = self._current_anchor_weight * (
                 native_contrib * anchor_per_cell).sum(dim=-1).mean()
 
-        t = torch.randint(0, self.T, (B,), device=device)
-        noise = torch.randn_like(z)
-        abar = self.alphas_cumprod[t].unsqueeze(-1)
-        # diff_detach (paper §B.4): stop-gradient between L_diff and encoder.
-        z_in = z.detach() if self.diff_detach else z
-        h_in = h.detach() if self.diff_detach else h
-        z_t = torch.sqrt(abar) * z_in + torch.sqrt(1 - abar) * noise
-        pred_noise = self.score_net(z_t, t, h_in, ct)
-        loss_diff = F.mse_loss(pred_noise, noise)
-
         prior_mean = torch.sigmoid(self.eps_prior_mean_logit)
         if self.mu_eps_strategy == "clamp":
             prior_mean = prior_mean.clamp(0.05, 0.95)
@@ -216,64 +164,32 @@ class DeSpotX(nn.Module):
             loss_mu_eps_hyper = self.mu_eps_hyperprior_weight * -(
                 1.0 * torch.log(pm_safe) + 7.0 * torch.log(1 - pm_safe))
 
-        total = (loss_recon + loss_anchor
-                 + self.diff_weight * loss_diff + loss_eps_prior
+        total = (loss_recon + loss_anchor + loss_eps_prior
                  + loss_mu_eps_hyper)
         return total, {
             "recon": loss_recon.item(),
             "anchor": loss_anchor.item(),
-            "diff": loss_diff.item(),
             "eps_prior": loss_eps_prior.item(),
             "mu_eps_hyper": loss_mu_eps_hyper.detach().item(),
         }
 
     @torch.no_grad()
-    def adjust_counts(self, batch, n_refine_steps = 10):
-        """DDIM-refine z, decode phi, return x * (1-eps)*phi / [(1-eps)*phi + eps*chi]."""
+    def adjust_counts(self, batch):
+        """Decode phi, return x * (1-eps)*phi / [(1-eps)*phi + eps*chi] * (1 - anchor_mask[ct])."""
         x = batch["counts"]
         ct = batch["cell_type"]
-        B = x.size(0)
-        device = x.device
 
-        h, z_enc = self._encode(batch)
+        h, z = self._encode(batch)
         eps = torch.sigmoid(self.eps_head(h)).squeeze(-1)
-        d = x.sum(dim=-1, keepdim=True).clamp(min=1.0)
         chi = self.encoder.chi_from_neighbors(batch)
-
-        # diff_weight=0: skip DDIM (untrained score net would corrupt z).
-        if self.diff_weight == 0:
-            z = z_enc
-        else:
-            t_max = max(1, int(self.T * self.refine_t_frac))
-            steps = torch.linspace(0, t_max - 1, n_refine_steps,
-                                   device=device).long()
-            t_start = steps[-1]
-            abar_start = self.alphas_cumprod[t_start]
-            noise = torch.randn_like(z_enc)
-            z = torch.sqrt(abar_start) * z_enc + torch.sqrt(1 - abar_start) * noise
-
-            for i in reversed(range(len(steps))):
-                t = steps[i]
-                t_b = t.expand(B)
-                abar_t = self.alphas_cumprod[t]
-                pred_noise = self.score_net(z, t_b, h, ct)
-                pred_z0 = (z - torch.sqrt(1 - abar_t) * pred_noise) / \
-                    torch.sqrt(abar_t).clamp(min=1e-3)
-                if i == 0:
-                    z = pred_z0
-                else:
-                    # DDIM eta=0 (deterministic).
-                    abar_prev = self.alphas_cumprod[steps[i - 1]]
-                    z = (torch.sqrt(abar_prev) * pred_z0
-                         + torch.sqrt(1 - abar_prev) * pred_noise)
 
         phi = self.decoder(z, ct)
         native = (1 - eps.unsqueeze(-1)) * phi
         ambient = eps.unsqueeze(-1) * chi
         p_native = native / (native + ambient + 1e-12)
 
-        anchor_per_cell = (self.anchor_mask[ct]
-                           if self.anchor_mask is not None
-                           else torch.zeros_like(x))
-        adjusted = x * p_native * (1.0 - anchor_per_cell)
+        if self.apply_output_mask and self.anchor_mask is not None:
+            adjusted = x * p_native * (1.0 - self.anchor_mask[ct])
+        else:
+            adjusted = x * p_native
         return adjusted, eps

@@ -42,9 +42,9 @@ about:
   license_file: ../LICENSE
   summary: Spatial-aware ambient RNA decontamination for single-cell spatial transcriptomics
   description: |
-    DeSpotX is a graph-attention encoder + cell-type-conditioned decoder
-    + latent diffusion prior, trained jointly to factor each cell's counts
-    into a native-signal component and a spatially-aggregated ambient component.
+    DeSpotX is a graph-attention encoder + cell-type-conditioned decoder,
+    trained jointly to factor each cell's counts into a native-signal
+    component and a spatially-aggregated ambient component.
 
 extra:
   recipe-maintainers:

@@ -15,7 +15,6 @@ def adjust_counts(
     batch_size = 256,
     device = "auto",
     num_workers = 4,
-    n_refine_steps = 10,
 ):
     """Decontaminate the full dataset; returns dict {adjusted, epsilon}."""
     device = _resolve_device(device)
@@ -27,8 +26,7 @@ def adjust_counts(
     adj_parts, eps_parts = [], []
     for batch in loader:
         batch = move_batch(batch, device)
-        adj, eps = model.adjust_counts(batch,
-                                        n_refine_steps=n_refine_steps)
+        adj, eps = model.adjust_counts(batch)
         adj_parts.append(adj.cpu().numpy().astype(np.float32))
         eps_parts.append(eps.cpu().numpy().astype(np.float32))
     return {"adjusted": np.concatenate(adj_parts),

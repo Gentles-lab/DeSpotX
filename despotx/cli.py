@@ -38,9 +38,6 @@ def main():
     p.add_argument("--num-workers", type=int, default=4)
     p.add_argument("--amp", action="store_true",
                    help="Use CUDA automatic mixed precision")
-    p.add_argument("--diff-loss-weight", type=float, default=1.0,
-                   help="Weight on L_diff. 0 = ablation: disable the diffusion "
-                        "prior; inference also skips DDIM refinement.")
     p.add_argument("--eps-prior-weight", type=float, default=1.0,
                    help="Weight on the Beta prior over per-cell ε. "
                         "0 = ablation: ε is no longer pulled toward μ_ε.")
@@ -108,8 +105,6 @@ def main():
                      z_dim=args.z_dim, anchor_mask=eff_anchor_mask,
                      anchor_weight=args.anchor_weight,
                      edge_feat="kernel",
-                     diff_detach=True,
-                     diff_loss_weight=args.diff_loss_weight,
                      chi_mode="other_type_hard",
                      chi_soft_leak=0.1,
                      eps_prior_weight=args.eps_prior_weight,
