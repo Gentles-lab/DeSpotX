@@ -35,6 +35,12 @@ def main():
     p.add_argument("--batch-size", type=int, default=128)
     p.add_argument("--lr", type=float, default=1e-3)
     p.add_argument("--anchor-weight", type=float, default=50.0)
+    p.add_argument("--anchor-output-mask",
+                   action=argparse.BooleanOptionalAction, default=True,
+                   help="Set counts at anchor positions to zero in the output "
+                        "(default: enabled). --no-anchor-output-mask keeps the "
+                        "anchor penalty during training but returns the soft "
+                        "reweighted counts at anchor positions.")
     p.add_argument("--num-workers", type=int, default=4)
     p.add_argument("--amp", action="store_true",
                    help="Use CUDA automatic mixed precision")
@@ -111,7 +117,8 @@ def main():
                      mu_eps_strategy="clamp",
                      mu_eps_hyperprior_weight=1.0,
                      n_gat_layers=1,
-                     eps_head_init=args.eps_head_init)
+                     eps_head_init=args.eps_head_init,
+                     apply_output_mask=args.anchor_output_mask)
     model.warm_start_decoder(adata, cell_type_col=args.cell_type_col,
                               set_decoder_shift=True)
 
